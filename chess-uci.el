@@ -30,7 +30,7 @@
 (require 'chess-polyglot)
 
 (defgroup chess-uci nil
-  "Customisations for Chess engines based on the UCI protocol"
+  "Customisations for Chess engines based on the UCI protocol."
   :group 'chess)
 
 (defvar chess-uci-long-algebraic-regexp "\\([a-h][1-8]\\)\\([a-h][1-8]\\)\\([nbrq]\\)?"

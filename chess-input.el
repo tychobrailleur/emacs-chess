@@ -49,7 +49,7 @@
 (make-variable-buffer-local 'chess-input-move-function)
 
 (defgroup chess-input nil
-  "Move input related otpions."
+  "Move input related options."
   :group 'chess)
 
 (defcustom chess-input-notation-type :san
