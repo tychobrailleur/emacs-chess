@@ -1,8 +1,8 @@
 BUILT_SOURCES  = chess-auto.el
 CLEANFILES     = TAGS chess-auto.el auto-autoloads.el
 EXTRA_DIST     = autogen.sh chess-auto.el.in chess-eco.pos chess-polyglot.bin doc/chess.pdf
-DISTCLEANFILES = chess-eco.fen doc/chess.info doc/chess.pdf $(TESTS)
-info_TEXINFOS  = doc/chess.texi
+DISTCLEANFILES = chess-eco.fen chess.info chess.pdf $(TESTS)
+info_TEXINFOS  = chess.texi
 dist_lisp_DATA = _pkg.el chess-eco.fen
 
 dist_lisp_LISP =	   \
@@ -30,7 +30,6 @@ dist_lisp_LISP =	   \
 	chess-gnuchess.el  \
 	chess-ics.el	   \
 	chess-ics1.el	   \
-	chess-ics2.el	   \
 	chess-images.el	   \
 	chess-input.el	   \
 	chess-irc.el	   \
