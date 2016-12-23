@@ -23,10 +23,13 @@
 
 (require 'chess-common)
 (require 'chess-fen)
+(require 'chess-pgn)
 
 (defgroup chess-gnuchess nil
-  "The publicly available chess engine 'gnuchess'."
-  :group 'chess-engine)
+  "The publically available chess engine 'gnuchess'."
+  :group 'chess-engine
+  :link '(custom-manual "(chess)GNU Chess")
+  :link '(url-link "http://www.gnu.org/software/chess/"))
 
 (defcustom chess-gnuchess-path (let ((exec-path (cons "/usr/games" exec-path)))
 				 (executable-find "gnuchess"))
@@ -77,7 +80,7 @@
       (if (zerop (chess-game-index (car args)))
 	  (chess-gnuchess-handler game 'setup-pos (chess-game-pos game 0))
 	(let ((file (chess-with-temp-file
-			(insert (chess-game-to-string (car args)) ?\n))))
+			(chess-insert-pgn (car args)) (insert ?\n))))
 	  (chess-engine-send nil (format "pgnload %s\n" file)))))
 
      ((eq event 'pass)

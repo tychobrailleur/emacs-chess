@@ -44,7 +44,8 @@
 
 (defgroup chess-ics nil
   "Engine for interacting with Internet Chess Servers."
-  :group 'chess-engine)
+  :group 'chess
+  :link '(custom-manual "(chess)Internet Chess Servers"))
 
 (defcustom chess-ics-server-list '(("freechess.org" 5000)
 				   ("chess.unix-ag.uni-kl.de" 5000)
@@ -825,6 +826,9 @@ This function should be put on `comint-preoutput-filter-functions'."
 		  (> (setq ntimes (1- ntimes)) 0))
 	(accept-process-output (get-buffer-process (current-buffer)) 0 100)))
     (switch-to-buffer buf)))
+
+;;;###autoload
+(define-key menu-bar-games-menu [chess-ics] '(menu-item "Internet Chess Servers" chess-ics :help "Play Chess on the Internet"))
 
 ;;; ICC datagrams
 

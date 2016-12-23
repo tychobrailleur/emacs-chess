@@ -55,12 +55,14 @@
 ;;; Code:
 
 (require 'chess-algebraic)
+(require 'chess-display)
 (require 'chess-fen)
+(require 'chess-game)
 (require 'chess-ply)
 (require 'chess-message)
-
-(eval-when-compile
-  (require 'pcomplete nil t))
+(require 'mm-decode)
+(require 'mm-view)
+(require 'pcomplete)
 
 (defvar chess-pgn-fill-column 60)
 
@@ -90,6 +92,7 @@
 	    (unless ply
 	      (chess-error 'pgn-read-error move))
 	    (setq position (chess-ply-next-pos ply))
+	    (chess-pos-set-annotations position nil)
 	    (nconc plies (list ply))))
 
 	 ((and top-level
@@ -151,15 +154,21 @@ Optionally use the supplied STRING instead of the current buffer."
 	       (goto-char (match-beginning 0))))
       (let ((game (chess-game-create)))
 	(chess-game-set-tags game nil)
-	(while (looking-at "\\[\\(\\S-+\\)\\s-+\\(\".*?\"\\)\\][ \t\n\r]+")
+	(while (looking-at (rx
+			    ?[ (group (one-or-more (not (syntax whitespace))))
+			       (one-or-more (syntax whitespace))
+			       (syntax string-quote)
+			       (group (*? not-newline))
+			       (syntax string-quote)
+			       ?]
+			    (one-or-more (char ?  ?\n ?\r ?\t))))
 	  (chess-game-set-tag game (match-string-no-properties 1)
-			      (let ((str (match-string-no-properties 2)))
-				(substring str 1 (1- (length str)))))
+			      (match-string-no-properties 2))
 	  (goto-char (match-end 0)))
 	(let ((fen (chess-game-tag game "FEN")))
-	  (if fen
-	      (chess-game-set-start-position game (chess-fen-to-pos fen)))
-	  (chess-game-set-plies game (chess-pgn-read-plies game (chess-game-pos game) t)))
+	  (when fen
+	    (chess-game-set-start-position game (chess-fen-to-pos fen))))
+	(chess-game-set-plies game (chess-pgn-read-plies game (chess-game-pos game) t))
 	game)
     (error "Data not in legal PGN format: '%s'"
 	   (buffer-substring (point) (point-max)))))
@@ -254,7 +263,6 @@ PGN text."
 ;;
 
 (require 'chess-database)
-(require 'chess-file)
 
 (defvar chess-pgn-database nil
   "Chess database object.")
@@ -273,6 +281,8 @@ PGN text."
 (chess-message-catalog 'english
   '((could-not-read-pgn . "Could not read or find a PGN game")))
 
+(declare-function chess-create-display "chess.el" (perspective &optional modules-too))
+
 ;;;###autoload
 (defun chess-pgn-read (&optional file)
   "Read and display a PGN game after point."
@@ -288,6 +298,18 @@ PGN text."
 	 game)
       (chess-error 'could-not-read-pgn))))
 
+(defvar chess-pgn-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map text-mode-map)
+    (define-key map [(control ?c) (control ?c)] 'chess-pgn-show-position)
+    (define-key map [mouse-2] 'chess-pgn-mouse-show-position)
+
+    ;;(define-key map [(control ?m)] 'chess-pgn-move)
+    ;;(define-key map [space] 'chess-pgn-move)
+    (define-key map [? ] 'chess-pgn-insert-and-show-position)
+    (define-key map [tab] 'chess-pgn-complete-move)
+    map))
+
 ;;;###autoload
 (define-derived-mode chess-pgn-mode text-mode "PGN"
   "A mode for editing chess PGN files."
@@ -300,23 +322,12 @@ PGN text."
 
   (if (fboundp 'font-lock-mode)
       (font-lock-mode 1))
-
-  (let ((map (current-local-map)))
-    (define-key map [(control ?c) (control ?c)] 'chess-pgn-show-position)
-    (define-key map [mouse-2] 'chess-pgn-mouse-show-position)
-
-    ;;(define-key map [(control ?m)] 'chess-pgn-move)
-    ;;(define-key map [space] 'chess-pgn-move)
-    (define-key map [? ] 'chess-pgn-insert-and-show-position)
-
-    (when (require 'pcomplete nil t)
-      (set (make-local-variable 'pcomplete-default-completion-function)
-           'chess-pgn-completions)
-      (set (make-local-variable 'pcomplete-command-completion-function)
-           'chess-pgn-completions)
-      (set (make-local-variable 'pcomplete-parse-arguments-function)
-           'chess-pgn-current-word)
-      (define-key map [tab] 'chess-pgn-complete-move))))
+  (set (make-local-variable 'pcomplete-default-completion-function)
+       'chess-pgn-completions)
+  (set (make-local-variable 'pcomplete-command-completion-function)
+       'chess-pgn-completions)
+  (set (make-local-variable 'pcomplete-parse-arguments-function)
+       'chess-pgn-current-word))
 
 ;;;###autoload
 (defalias 'pgn-mode 'chess-pgn-mode)
@@ -383,6 +394,8 @@ PGN text."
 	  (if second-move
 	      (setq ply (1+ ply)))
 	  ply))))
+
+(defvar chess-file-locations nil)
 
 (defun chess-pgn-read-game ()
   "Load a database to represent this file if not already up."

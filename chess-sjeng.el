@@ -22,10 +22,12 @@
 
 (require 'chess-common)
 (require 'chess-fen)
+(require 'chess-pgn)
 
 (defgroup chess-sjeng nil
-  "The publicly available chess engine 'sjeng'."
+  "The publically available chess engine 'sjeng'."
   :group 'chess-engine
+  :link '(custom-manual "(chess)Sjeng")
   :link '(url-link "http://sjeng.sourceforge.net"))
 
 (defcustom chess-sjeng-path (executable-find "sjeng")
@@ -94,7 +96,7 @@
 
      ((eq event 'setup-game)
       (let ((file (chess-with-temp-file
-		      (insert (chess-game-to-string (car args)) ?\n))))
+		      (chess-insert-pgn (car args)) (insert ?\n))))
 	(chess-engine-send nil (format "read %s\n" file))))
 
      ((eq event 'set-option)

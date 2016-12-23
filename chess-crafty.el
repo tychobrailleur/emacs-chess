@@ -23,11 +23,13 @@
 
 (require 'chess-common)
 (require 'chess-fen)
+(require 'chess-pgn)
 (require 'chess-var)
 
 (defgroup chess-crafty nil
-  "The publicly available chess engine 'crafty'."
-  :group 'chess-engine)
+  "The publically available chess engine 'crafty'."
+  :group 'chess-engine
+  :link '(custom-manual "(chess)Crafty"))
 
 (defcustom chess-crafty-path (or (executable-find "crafty")
 				 (executable-find "wcrafty"))
@@ -149,7 +151,7 @@
 
      ((eq event 'setup-game)
       (let ((file (chess-with-temp-file
-		      (insert (chess-game-to-string (car args)) ?\n))))
+		      (chess-insert-pgn (car args)) (insert ?\n))))
 	(chess-engine-send nil (format "read %s\n" file))))
 
      ((eq event 'set-option)

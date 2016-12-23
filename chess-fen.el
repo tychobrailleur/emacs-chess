@@ -65,7 +65,7 @@
 
 (defun chess-fen-to-pos (fen)
   "Convert a FEN-like notation string to a chess position."
-  (cl-assert (stringp fen))
+  (cl-check-type fen string)
   (let ((i 0) (l (length fen))
 	(rank 0) (file 0) (c ?0)
 	(position (chess-pos-create t))
@@ -118,7 +118,7 @@
 (defun chess-pos-to-fen (position &optional full)
   "Convert a chess POSITION to FEN-like notation.
 If FULL is non-nil, represent trailing spaces as well."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (let ((blank 0) (str "") output)
     (dotimes (rank 8)
       (dotimes (file 8)
@@ -145,11 +145,11 @@ If FULL is non-nil, represent trailing spaces as well."
       (if (and index
 	       (let ((pawn (if (chess-pos-side-to-move position) ?P ?p)))
 		 (or (and (chess-incr-index index 0 -1)
-			  (eq (chess-pos-piece position (chess-incr-index
-							 index 0 -1)) pawn))
+			  (chess-pos-piece-p position (chess-incr-index
+						       index 0 -1) pawn))
 		     (and (chess-incr-index index 0 1)
-			  (eq (chess-pos-piece position (chess-incr-index
-							 index 0 1)) pawn)))))
+			  (chess-pos-piece-p position (chess-incr-index
+						       index 0 1) pawn)))))
 	  (concat str (chess-index-to-coord
 		       (if (chess-pos-side-to-move position)
 			   (chess-incr-index index -1 0)

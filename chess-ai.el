@@ -30,11 +30,11 @@
 
 ;;; Code:
 
-(require 'chess)
+(require 'chess-algebraic)
 (require 'chess-common)
 (require 'chess-polyglot)
-(require 'chess-pos)
 (require 'chess-ply)
+(require 'chess-pos)
 (require 'cl-lib)
 
 (defgroup chess-ai ()
@@ -42,7 +42,8 @@
 
 This module does not allow to configure search time used to calculate
 reply moves.  You can only specify the search depth (see `chess-ai-depth')."
-  :group 'chess)
+  :group 'chess
+  :link '(custom-manual "(chess)AI"))
 
 (defcustom chess-ai-depth 2
   "The default search depth used to prune the search tree.
@@ -101,7 +102,7 @@ this ply depth limit has been reached."
 
 (defun chess-ai-eval-static (position)
   "Calculate the static score for POSITION."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (let ((v 0)
 	(status (chess-pos-status position)))
     (if (eq status :checkmate)
@@ -305,6 +306,8 @@ DEPTH defaults to the value of `chess-ai-depth'."
 		      (1+ most-negative-fixnum) most-positive-fixnum
 		      (or eval-fn #'chess-ai-eval-static))))
 
+(defvar chess-full-name)
+
 (defun chess-ai-handler (game event &rest args)
   (unless chess-engine-handling-event
     (cond
@@ -312,8 +315,7 @@ DEPTH defaults to the value of `chess-ai-depth'."
       (setq chess-engine-opponent-name "Emacs AI")
       t)
 
-     ((eq event 'new)
-      (chess-engine-set-position nil))
+     ((eq event 'new) (chess-engine-set-position nil))
 
      ((eq event 'move)
       (when (= 1 (chess-game-index game))
@@ -322,18 +324,18 @@ DEPTH defaults to the value of `chess-ai-depth'."
       (when (chess-game-over-p game)
 	(chess-game-set-data game 'active nil)))
 
-     ((eq event 'post-move)
+     ((memq event '(post-move pass))
       (unless (chess-game-over-p game)
 	(let ((chess-display-handling-event nil)
 	      (position (chess-engine-position nil)))
 	  (funcall chess-engine-response-handler 'move
 		   (or (and (bufferp chess-polyglot-book)
 			    (buffer-live-p chess-polyglot-book)
-			    (chess-polyglot-book-ply chess-polyglot-book position))
+			    (chess-polyglot-book-ply chess-polyglot-book
+						     position))
 		       (chess-ai-best-move position))))))
 
-     (t
-      (apply 'chess-common-handler game event args)))))
+     (t (apply 'chess-common-handler game event args)))))
 
 (provide 'chess-ai)
 ;;; chess-ai.el ends here

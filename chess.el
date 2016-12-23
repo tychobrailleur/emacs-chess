@@ -4,7 +4,7 @@
 
 ;; Author: John Wiegley <johnw@gnu.org>
 ;; Maintainer: Mario Lang <mlang@delysid.org>
-;; Version: 2.0.1
+;; Version: 2.0.4
 ;; Package-Requires: ((cl-lib "0.5"))
 ;; Keywords: games
 ;; Compatibility: Emacs24
@@ -86,9 +86,10 @@
 
 (defgroup chess nil
   "An Emacs chess playing program."
-  :group 'games)
+  :group 'games
+  :link '(custom-manual "(chess)Top"))
 
-(defconst chess-version "2.0.0"
+(defconst chess-version "2.0.4"
   "The version of the Emacs chess program.")
 
 (defcustom chess-default-display
@@ -101,7 +102,7 @@ not available."
 
 (defcustom chess-default-modules
   '((chess-sound chess-announce)
-    chess-autosave
+    ;;chess-autosave ml (2014-06-06): module not fully working
     chess-clock
     ;;chess-kibitz   jww (2002-04-30): not fully supported yet
     ;;chess-chat
@@ -232,6 +233,9 @@ Otherwise use `chess-default-engine' to determine the engine."
 
 ;;;###autoload
 (defalias 'chess-session 'chess)
+
+;;;###autoload
+(define-key menu-bar-games-menu [chess] '(menu-item "Chess" chess :help "Play Chess"))
 
 ;;;###autoload
 (defun chess-create-display (perspective &optional modules-too)

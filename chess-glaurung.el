@@ -23,8 +23,9 @@
 (require 'chess-uci)
 
 (defgroup chess-glaurung nil
-  "The publicly available chess engine 'glaurung'."
+  "The publically available chess engine 'glaurung'."
   :group 'chess-engine
+  :link '(custom-manual "(chess)Glaurung")
   :link '(url-link "http://www.glaurungchess.com/"))
 
 (defcustom chess-glaurung-path (executable-find "glaurung")

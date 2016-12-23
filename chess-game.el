@@ -28,7 +28,6 @@
 
 (eval-when-compile (require 'cl-lib))
 (require 'chess-ply)
-(require 'chess-pgn)
 
 (defvar chess-game-inhibit-events nil)
 
@@ -230,7 +229,7 @@ If INDEX is non-nil, the last played ply is returned."
     (car (last (chess-game-plies game)))))
 
 (defun chess-game-add-ply (game ply)
-  "Return the position related to GAME's INDEX position."
+  "Add PLY to the main variation of GAME."
   (cl-assert game)
   (cl-check-type ply listp)
   (let ((plies (chess-game-plies game)))
@@ -253,7 +252,6 @@ If INDEX is non-nil, the last played ply is returned."
     (chess-game-set-plies game (nbutlast (chess-game-plies game) count)))
   (chess-game-run-hooks game 'post-undo count))
 
-
 (defun chess-game-strip-annotations (game)
   "Strip all annotations from the given GAME."
   (cl-assert game)
@@ -261,23 +259,12 @@ If INDEX is non-nil, the last played ply is returned."
     (let ((position (chess-game-pos game i)))
       (chess-pos-set-annotations position nil))))
 
-
 (defsubst chess-game-over-p (game)
   "Return non-nil if GAME is at a final positionn."
   (cl-assert game)
   (let ((last-ply (car (last (nth 3 game) 2))))
     (and last-ply (chess-ply-final-p last-ply))))
 
-
-(defsubst chess-game-to-string (game &optional indented)
-  "Convert GAME to a string in PGN format."
-  (cl-assert game)
-  (chess-game-to-pgn game indented t))
-
-(defsubst chess-game-from-string (pgn)
-  "Convert a PGN format string to a chess game object."
-  (cl-check-type pgn string)
-  (chess-pgn-to-game pgn))
 
 (defsubst chess-game-copy-game (game new-game)
   (cl-assert game)

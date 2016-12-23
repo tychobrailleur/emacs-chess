@@ -67,71 +67,85 @@
   "Routines for manipulating chess plies."
   :group 'chess)
 
+(defsubst chess-ply-p (ply)
+  (and (consp ply) (chess-pos-p (car ply))))
+
 (defsubst chess-ply-pos (ply)
   "Returns the base position associated with PLY."
-  (cl-assert (listp ply))
+  (cl-check-type ply chess-ply)
   (car ply))
 
 (defsubst chess-ply-set-pos (ply position)
   "Set the base position of PLY."
-  (cl-assert (listp ply))
-  (cl-assert (vectorp position))
+  (cl-check-type ply chess-ply)
+  (cl-check-type position chess-pos)
   (setcar ply position))
 
+(gv-define-simple-setter chess-ply-pos chess-ply-set-pos)
+
 (defsubst chess-ply-changes (ply)
-  (cl-assert (listp ply))
+  (cl-check-type ply chess-ply)
   (cdr ply))
 
 (defsubst chess-ply-set-changes (ply changes)
-  (cl-assert (listp ply))
-  (cl-assert (listp changes))
+  (cl-check-type ply chess-ply)
+  (cl-check-type changes list)
   (setcdr ply changes))
 
+(gv-define-simple-setter chess-ply-changes chess-ply-set-changes)
+
 (defun chess-ply-any-keyword (ply &rest keywords)
-  (cl-assert (listp ply))
+  "Return non-nil if PLY contains at least one of KEYWORDS."
+  (declare (side-effect-free t))
+  (cl-check-type ply chess-ply)
   (catch 'found
     (dolist (keyword keywords)
       (if (memq keyword (chess-ply-changes ply))
 	  (throw 'found keyword)))))
 
 (defun chess-ply-keyword (ply keyword)
-  (cl-assert (listp ply))
-  (cl-assert (symbolp keyword))
+  "Determine if PLY has KEYWORD.
+If KEYWORD can be found in the changes of PLY, the value
+directly following it is returned (as if it was part of a property list).
+If KEYWORD is the last element of the changes of ply, `t' is returned."
+  (declare (side-effect-free t))
+  (cl-check-type ply chess-ply)
+  (cl-check-type keyword symbol)
   (let ((item (memq keyword (chess-ply-changes ply))))
-    (if item
-	(if (eq item (last (chess-ply-changes ply)))
-	    t
-	  (cadr item)))))
+    (and item (if (cdr item) (cadr item) t))))
 
 (defun chess-ply-set-keyword (ply keyword &optional value)
-  (cl-assert (listp ply))
-  (cl-assert (symbolp keyword))
+  (cl-check-type ply chess-ply)
+  (cl-check-type keyword symbol)
   (let* ((changes (chess-ply-changes ply))
 	 (item (memq keyword changes)))
     (if item
-	(if value
-	    (setcar (cdr item) value))
+	(when value
+	  (setcar (cdr item) value))
       (nconc changes (if value
 			 (list keyword value)
 		       (list keyword))))
     value))
 
+(gv-define-simple-setter chess-ply-keyword chess-ply-set-keyword)
+
 (defsubst chess-ply-source (ply)
   "Returns the source square index value of PLY."
-  (cl-assert (listp ply))
+  (cl-check-type ply chess-ply)
   (let ((changes (chess-ply-changes ply)))
     (and (listp changes) (not (symbolp (car changes)))
 	 (car changes))))
 
 (defsubst chess-ply-target (ply)
   "Returns the target square index value of PLY."
-  (cl-assert (listp ply))
+  (cl-check-type ply chess-ply)
   (let ((changes (chess-ply-changes ply)))
     (and (listp changes) (not (symbolp (car changes)))
 	 (cadr changes))))
 
 (defsubst chess-ply-next-pos (ply)
-  (cl-assert (listp ply))
+  "Return the position that results from executing PLY."
+  (cl-check-type ply chess-ply)
   (or (chess-ply-keyword ply :next-pos)
       (let ((position (apply 'chess-pos-move
 			     (chess-pos-copy (chess-ply-pos ply))
@@ -139,33 +153,27 @@
 	(chess-pos-set-preceding-ply position ply)
 	(chess-ply-set-keyword ply :next-pos position))))
 
-(defconst chess-piece-name-table
-  '(("queen"  . ?q)
-    ("rook"   . ?r)
-    ("knight" . ?n)
-    ("bishop" . ?b)))
-
 (defun chess-ply-castling-changes (position &optional long king-index)
   "Create castling changes; this function supports Fischer Random castling."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (let* ((color (chess-pos-side-to-move position))
 	 (king (or king-index (chess-pos-king-index position color)))
 	 (rook (chess-pos-can-castle position (if color
 						  (if long ?Q ?K)
 						(if long ?q ?k))))
-	 (bias (if long -1 1)) pos)
+	 (direction (if long chess-direction-west chess-direction-east)) pos)
     (when rook
-      (setq pos (chess-incr-index king 0 bias))
-      (while (and pos (not (equal pos rook))
+      (setq pos (chess-next-index king direction))
+      (while (and pos (/= pos rook)
 		  (chess-pos-piece-p position pos ? )
 		  (or (and long (< (chess-index-file pos) 2))
 		      (chess-pos-legal-candidates
 		       position color pos (list king))))
-	(setq pos (chess-incr-index pos 0 bias)))
-      (if (equal pos rook)
-	  (list king (chess-rf-to-index (if color 7 0) (if long 2 6))
-		rook (chess-rf-to-index (if color 7 0) (if long 3 5))
-		(if long :long-castle :castle))))))
+	(setq pos (chess-next-index pos direction)))
+      (when (equal pos rook)
+	(list king (if color (if long #o72 #o76) (if long #o02 #o06))
+	      rook (if color (if long #o73 #o75) (if long #o03 #o05))
+	      (if long :long-castle :castle))))))
 
 (chess-message-catalog 'english
   '((ambiguous-promotion . "Promotion without :promote keyword")))
@@ -173,7 +181,7 @@
 (defvar chess-ply-checking-mate nil)
 
 (defsubst chess-ply-create* (position)
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (list position))
 
 (defun chess-ply-create (position &optional valid-p &rest changes)
@@ -184,7 +192,7 @@ also extend castling, and will prompt for a promotion piece.
 
 Note: Do not pass in the rook move if CHANGES represents a castling
 maneuver."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (let* ((ply (cons position changes))
 	 (color (chess-pos-side-to-move position))
 	 piece)
@@ -217,7 +225,7 @@ maneuver."
 							   (car changes))))
 		    (setcdr ply new-changes)))
 
-	    (when (eq piece (if color ?P ?p))
+	    (when (= piece (if color ?P ?p))
 	      ;; is this a pawn move to the ultimate rank?  if so, check
 	      ;; that the :promote keyword is present.
 	      (when (and (not (memq :promote changes))
@@ -271,31 +279,32 @@ maneuver."
   "Return non-nil if this is the last ply of a game/variation."
   (or (chess-ply-any-keyword ply :drawn :perpetual :repetition
 			     :flag-fell :resign :aborted)
-      (chess-ply-any-keyword (chess-pos-preceding-ply
-			      (chess-ply-pos ply)) :stalemate :checkmate)))
+      (let ((preceding-ply (chess-pos-preceding-ply (chess-ply-pos ply))))
+	(when preceding-ply
+	  (chess-ply-any-keyword preceding-ply :stalemate :checkmate)))))
 
 (defvar chess-ply-throw-if-any nil)
 
-(defmacro chess-ply--add (rank-adj file-adj &optional pos)
+(defmacro chess-ply--add (target)
   "This is totally a shortcut."
-  `(let ((target (or ,pos (chess-incr-index candidate ,rank-adj ,file-adj))))
-    (if (and (or (not specific-target)
-		 (= target specific-target))
-	     (chess-pos-legal-candidates position color target
-					 (list candidate)))
-	(if chess-ply-throw-if-any
-	    (throw 'any-found t)
-	  (let ((promotion (and (chess-pos-piece-p position candidate
-						   (if color ?P ?p))
-				(= (chess-index-rank target)
-				   (if color 0 7)))))
-	    (if promotion
-		(dolist (promote '(?Q ?R ?B ?N))
-		  (let ((ply (chess-ply-create position t candidate target
-					       :promote promote)))
-		    (when ply (push ply plies))))
-	      (let ((ply (chess-ply-create position t candidate target)))
-		(when ply (push ply plies)))))))))
+  `(let ((target ,target))
+     (if (and (or (not specific-target) (= target specific-target))
+	   (chess-pos-legal-candidates position color target (list candidate)))
+      (if chess-ply-throw-if-any
+	  (throw 'any-found t)
+	(let ((promotion (and (chess-pos-piece-p position candidate
+						 (if color ?P ?p))
+			      (= (chess-index-rank target) (if color 0 7)))))
+	  (if promotion
+	      (dolist (promote '(?Q ?R ?B ?N))
+		(let ((ply (chess-ply-create position t candidate target
+					     :promote promote)))
+		  (when ply (push ply plies))))
+	    (let ((ply (chess-ply-create position t candidate target)))
+	      (when ply (push ply plies)))))))))
+
+(defconst chess-white-pieces '(?P ?N ?B ?R ?Q ?K))
+(defconst chess-black-pieces '(?p ?n ?b ?r ?q ?k))
 
 (defun chess-legal-plies (position &rest keywords)
   "Return a list of all legal plies in POSITION.
@@ -304,7 +313,7 @@ KEYWORDS allowed are:
   :any   return t if any piece can move at all
   :color <t or nil>
   :piece <piece character>
-  :file <number 0 to 7> [can only be used if :piece is present]
+  :file <number 0 to 7> [:piece or :color must be present]
   :index <coordinate index>
   :target <specific target index>
   :candidates <list of inddices>
@@ -314,7 +323,7 @@ criteria.
 
 NOTE: All of the returned plies will reference the same copy of the
 position object passed in."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (cond
    ((null keywords)
     (let ((plies (list t)))
@@ -343,25 +352,21 @@ position object passed in."
 	    (upcase (or piece
 			(chess-pos-piece position
 					 (cadr (memq :index keywords))))))
-	   (ep (when (eq test-piece ?P) (chess-pos-en-passant position)))
+	   (ep (when (= test-piece ?P) (chess-pos-en-passant position)))
 	   pos plies file)
       ;; since we're looking for moves of a particular piece, do a
       ;; more focused search
       (dolist (candidate
-	       (cond
-		((cadr (memq :candidates keywords))
-		 (cadr (memq :candidates keywords)))
-		((setq pos (cadr (memq :index keywords)))
-		 (list pos))
-		((setq file (cadr (memq :file keywords)))
-		 (let (candidates)
-		   (dotimes (rank 8)
-		     (setq pos (chess-rf-to-index rank file))
-		     (if (chess-pos-piece-p position pos piece)
-			 (push pos candidates)))
-		   candidates))
-		(t
-		 (chess-pos-search position piece))))
+	       (cond ((cadr (memq :candidates keywords)))
+		     ((setq pos (cadr (memq :index keywords))) (list pos))
+		     ((setq file (cadr (memq :file keywords)))
+		      (let (candidates)
+			(dotimes (rank 8)
+			  (setq pos (chess-rf-to-index rank file))
+			  (if (chess-pos-piece-p position pos (or piece color))
+			      (push pos candidates)))
+			candidates))
+		     (t (chess-pos-search position piece))))
 	(cond
 	 ;; pawn movement, which is diagonal 1 when taking, but forward
 	 ;; 1 or 2 when moving (the most complex piece, actually)
@@ -373,28 +378,28 @@ position object passed in."
 								 chess-direction-north
 							chess-direction-south)))))
 	    (when (chess-pos-piece-p position ahead ? )
-	      (chess-ply--add nil nil ahead)
+	      (chess-ply--add ahead)
 	      (if (and (= (if color 6 1) (chess-index-rank candidate))
 		       2ahead (chess-pos-piece-p position 2ahead ? ))
-		  (chess-ply--add nil nil 2ahead)))
+		  (chess-ply--add 2ahead)))
 	    (when (setq pos (chess-next-index candidate
 					      (if color
 						  chess-direction-northeast
 						chess-direction-southwest)))
 	      (if (chess-pos-piece-p position pos (not color))
-		  (chess-ply--add nil nil pos)
+		  (chess-ply--add pos)
 		;; check for en passant capture toward kingside
 		(when (and ep (= ep (funcall (if color #'+ #'-) pos 8)))
-		  (chess-ply--add nil nil pos))))
+		  (chess-ply--add pos))))
 	    (when (setq pos (chess-next-index candidate
 					      (if color
 						  chess-direction-northwest
 						chess-direction-southeast)))
 	      (if (chess-pos-piece-p position pos (not color))
-		  (chess-ply--add nil nil pos)
+		  (chess-ply--add pos)
 		;; check for en passant capture toward queenside
 		(when (and ep (eq ep (funcall (if color #'+ #'-) pos 8)))
-		  (chess-ply--add nil nil pos))))))
+		  (chess-ply--add pos))))))
 
 	 ;; the rook, bishop and queen are the easiest; just look along
 	 ;; rank and file and/or diagonal for the nearest pieces!
@@ -407,10 +412,10 @@ position object passed in."
 	    (while pos
 	      (if (chess-pos-piece-p position pos ? )
 		  (progn
-		    (chess-ply--add nil nil pos)
+		    (chess-ply--add pos)
 		    (setq pos (chess-next-index pos dir)))
 		(if (chess-pos-piece-p position pos (not color))
-		    (chess-ply--add nil nil pos))
+		    (chess-ply--add pos))
 		(setq pos nil)))))
 
 	 ;; the king is a trivial case of the queen, except when castling
@@ -419,7 +424,7 @@ position object passed in."
 	    (setq pos (chess-next-index candidate dir))
 	    (if (and pos (or (chess-pos-piece-p position pos ? )
 			     (chess-pos-piece-p position pos (not color))))
-		(chess-ply--add nil nil pos)))
+		(chess-ply--add pos)))
 
 	  (unless (chess-search-position position candidate (not color) nil t)
 	    (if (chess-pos-can-castle position (if color ?K ?k))
@@ -446,7 +451,7 @@ position object passed in."
 	    (if (and (setq pos (chess-next-index candidate dir))
 		     (or (chess-pos-piece-p position pos ? )
 			 (chess-pos-piece-p position pos (not color))))
-		(chess-ply--add nil nil pos))))
+		(chess-ply--add pos))))
 
 	 (t (chess-error 'piece-unrecognized))))
 

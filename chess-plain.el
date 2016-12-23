@@ -35,7 +35,8 @@
 
 (defgroup chess-plain nil
   "A minimal, customizable ASCII display."
-  :group 'chess-display)
+  :group 'chess-display
+  :link '(custom-manual "(chess)Plain ASCII diagram displays"))
 
 (defcustom chess-plain-border-style [?+ ?- ?+ ?| ?| ?+ ?- ?+]
   "If non-nil, a vector describing the border characters."
@@ -244,7 +245,8 @@ modify `chess-plain-piece-chars' to avoid real confusion.)"
   (cond
    ((eq event 'initialize) t)
    ((eq event 'popup) (funcall chess-plain-popup-function))
-   (t (apply (intern-soft (concat "chess-plain-" (symbol-name event))) args))))
+   (t (let ((handler (intern-soft (concat "chess-plain-" (symbol-name event)))))
+	(when handler (apply handler args))))))
 
 (defun chess-plain-popup ()
   (if chess-plain-separate-frame
@@ -254,7 +256,7 @@ modify `chess-plain-piece-chars' to avoid real confusion.)"
 
 (defun chess-plain-piece-text (piece rank file)
   (let ((white-square (zerop (% (+ file rank) 2))))
-    (if (eq piece ? )
+    (if (= piece ? )
 	(if white-square
 	    chess-plain-white-square-char
 	  chess-plain-black-square-char)

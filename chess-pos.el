@@ -85,8 +85,9 @@
 
 (require 'chess-message)
 (require 'cl-lib)
-(eval-when-compile
-  (cl-proclaim '(optimize (speed 3) (safety 2))))
+
+;; Elides cl-check-type and cl-assert
+(eval-when-compile (cl-proclaim '(optimize (speed 3) (safety 2))))
 
 (defgroup chess-pos nil
   "Routines for manipulating chess positions."
@@ -125,6 +126,10 @@ This variable automatically becomes buffer-local when changed.")
    ;; a pointer to the ply which led to this position
    nil]
   "Starting position of a regular chess game.")
+
+(defsubst chess-pos-p (position)
+  "Return non-nil if POSITION is a chess position object."
+  (and (vectorp position) (= (length position) 75)))
 
 (chess-message-catalog 'english
   '((chess-nag-1   . "good move [traditional \"!\"]")
@@ -269,21 +274,20 @@ This variable automatically becomes buffer-local when changed.")
 
 (defsubst chess-pos-piece (position index)
   "Return the piece on POSITION at INDEX."
-  (cl-assert (vectorp position))
-  (cl-assert (and (>= index 0) (< index 64)))
+  (cl-check-type position chess-pos)
+  (cl-check-type index (integer 0 63))
   (aref position index))
 
 (defsubst chess-pos-piece-p (position index piece-or-color)
   "Return non-nil if at POSITION/INDEX there is the given PIECE-OR-COLOR.
 If PIECE-OR-COLOR is t for white or nil for black, any piece of that
 color will do."
-  (cl-assert (vectorp position))
-  (cl-assert (and (>= index 0) (< index 64)))
-  (cl-assert (memq piece-or-color
-		'(t nil ?  ?K ?Q ?N ?B ?R ?P ?k ?q ?n ?b ?r ?p)))
+  (cl-check-type position chess-pos)
+  (cl-check-type index (integer 0 63))
+  (cl-check-type piece-or-color (member t nil ?  ?K ?Q ?N ?B ?R ?P ?k ?q ?n ?b ?r ?p))
   (let ((p (chess-pos-piece position index)))
     (cond
-     ((= p ? ) (eq p piece-or-color))
+     ((= p ? ) (and (numberp piece-or-color) (= p piece-or-color)))
      ((eq piece-or-color t) (< p ?a))
      ((eq piece-or-color nil) (> p ?a))
      (t (= p piece-or-color)))))
@@ -304,22 +308,40 @@ color will do."
   (cl-check-type index (integer 0 63))
   (mod index 8))
 
+(defsubst chess-rank-to-char (rank)
+  (cl-check-type rank (integer 0 7))
+  (+ (- 7 rank) ?1))
+
+(defsubst chess-rank-from-char (character)
+  (cl-check-type character character)
+  (- 7 (- character ?1)))
+
+(defsubst chess-file-to-char (file)
+  (cl-check-type file (integer 0 7))
+  (+ file ?a))
+
+(defsubst chess-file-from-char (character)
+  (cl-check-type character character)
+  (- character ?a))
+
 (defsubst chess-coord-to-index (coord)
   "Convert a COORD string (such as \"e4\" into an index value."
-  (cl-assert (stringp coord))
+  (cl-check-type coord string)
   (cl-assert (= (length coord) 2))
-  (chess-rf-to-index (- 7 (- (aref coord 1) ?1)) (- (aref coord 0) ?a)))
+  (chess-rf-to-index (chess-rank-from-char (aref coord 1))
+		     (chess-file-from-char (aref coord 0))))
 
 (defsubst chess-index-to-coord (index)
   "Convert the chess position INDEX into a coord string."
   (cl-check-type index (integer 0 63))
-  (string (+ (chess-index-file index) ?a) (+ (- 7 (chess-index-rank index)) ?1)))
+  (string (chess-file-to-char (chess-index-file index))
+	  (chess-rank-to-char (chess-index-rank index))))
 
 (defsubst chess-incr-index (index rank-move file-move)
   "Create a new INDEX from an old one, by adding RANK-MOVE and FILE-MOVE."
-  (cl-assert (and (>= index 0) (< index 64)))
-  (cl-assert (and (>= rank-move -7) (<= rank-move 7)))
-  (cl-assert (and (>= file-move -7) (<= file-move 7)))
+  (cl-check-type index (integer 0 63))
+  (cl-check-type rank-move (integer -7 7))
+  (cl-check-type file-move (integer -7 7))
   (let ((newrank (+ (chess-index-rank index) rank-move))
 	(newfile (+ (chess-index-file index) file-move)))
     (if (and (>= newrank 0) (< newrank 8)
@@ -330,9 +352,9 @@ color will do."
   "Create a new INDEX from an old one, by adding RANK-MOVE and FILE-MOVE.
 This differs from `chess-incr-index' by performing no safety checks,
 in order to execute faster."
-  (cl-assert (and (>= index 0) (< index 64)))
-  (cl-assert (and (>= rank-move -7) (<= rank-move 7)))
-  (cl-assert (and (>= file-move -7) (<= file-move 7)))
+  (cl-check-type index (integer 0 63))
+  (cl-check-type rank-move (integer -7 7))
+  (cl-check-type file-move (integer -7 7))
   (chess-rf-to-index (+ (chess-index-rank index) rank-move)
 		     (+ (chess-index-file index) file-move)))
 
@@ -412,7 +434,7 @@ in order to execute faster."
 					 chess-rook-directions)
   "The directions a queen is allowed to move to.")
 
-(defvaralias 'chess-king-directions 'chess-queen-directions
+(defconst chess-king-directions chess-queen-directions
   "The directions a king is allowed to move to.")
 
 (defconst chess-sliding-white-piece-directions
@@ -464,9 +486,8 @@ If the new index is not on the board, nil is returned."
   "Look on POSITION anywhere for PIECE-OR-COLOR, returning all coordinates.
 If PIECE-OR-COLOR is t for white or nil for black, any piece of that
 color will do.  See also `chess-pos-search*'."
-  (cl-assert (vectorp position))
-  (cl-assert (memq piece-or-color
-		'(t nil ?  ?K ?Q ?N ?B ?R ?P ?k ?q ?n ?b ?r ?p)))
+  (cl-check-type position chess-pos)
+  (cl-check-type piece-or-color (member t nil ?  ?K ?Q ?N ?B ?R ?P ?k ?q ?n ?b ?r ?p))
   (let (found)
     (dotimes (i 64)
       (if (chess-pos-piece-p position i piece-or-color)
@@ -477,35 +498,35 @@ color will do.  See also `chess-pos-search*'."
   "Look on POSITION for any of PIECES.
 The result is an alist where each element looks like (PIECE . INDICES).
 Pieces which did not appear in POSITION will be present in the resulting
-alist, but the `cdr' of their enties will be nil."
+alist, but the `cdr' of their entries will be nil."
   (cl-assert (not (null pieces)))
   (cl-assert (cl-reduce (lambda (ok piece)
 			  (when ok
 			    (memq piece '(?P ?N ?B ?R ?Q ?K ?p ?n ?b ?r ?q ?k))))
 			pieces :initial-value t))
-  (cl-assert (= (length pieces) (length (cl-delete-duplicates pieces))))
+  (cl-assert (equal pieces (delete-dups pieces)))
   (let ((alist (mapcar #'list pieces)))
     (dotimes (index 64)
       (let ((piece (chess-pos-piece position index)))
-	(unless (eq piece ? )
-	  (let ((entry (assq piece alist)))
+	(unless (= piece ? )
+	  (let ((entry (assoc piece alist)))
 	    (when entry (push index (cdr entry)))))))
     alist))
 
 (defsubst chess-pos-set-king-index (position color index)
   "Set the known index of the king on POSITION for COLOR, to INDEX.
-It is never necessary to call this function."
-  (cl-assert (vectorp position))
-  (cl-assert (memq color '(nil t)))
-  (cl-assert (and (>= index 0) (< index 64)))
+It is never necessary to call this function manually."
+  (cl-check-type position chess-pos)
+  (cl-check-type color (member nil t))
+  (cl-check-type index (integer 0 63))
   (aset position (if color 72 73) index))
 
 (defsubst chess-pos-king-index (position color)
   "Return the index on POSITION of the king.
 If COLOR is non-nil, return the position of the white king, otherwise
 return the position of the black king."
-  (cl-assert (vectorp position))
-  (cl-assert (memq color '(nil t)))
+  (cl-check-type position chess-pos)
+  (cl-check-type color (member nil t))
   (or (aref position (if color 72 73))
       (chess-pos-set-king-index position color
 				(chess-pos-search position (if color ?K ?k)))))
@@ -513,41 +534,37 @@ return the position of the black king."
 (defsubst chess-pos-set-piece (position index piece)
   "Set the piece on POSITION at INDEX to PIECE.
 PIECE must be one of K Q N B R or P.  Use lowercase to set black
-pieces."
-  (cl-assert (vectorp position))
-  (cl-assert (and (>= index 0) (< index 64)))
-  (cl-assert (memq piece '(?  ?K ?Q ?N ?B ?R ?P ?k ?q ?n ?b ?r ?p)))
+pieces.  A space `? ' clears the square."
+  (cl-check-type position chess-pos)
+  (cl-check-type index (integer 0 63))
+  (cl-check-type piece (member ?  ?K ?Q ?N ?B ?R ?P ?k ?q ?n ?b ?r ?p))
   (aset position index piece)
-  (if (= piece ?K)
-      (chess-pos-set-king-index position t index)
-    (if (= piece ?k)
-	(chess-pos-set-king-index position nil index))))
+  (when (memq piece '(?K ?k))
+    (chess-pos-set-king-index position (< piece ?a) index)))
 
 (defun chess-pos-can-castle (position side)
   "Return whether the king on POSITION can castle on SIDE.
 SIDE must be either ?K for the kingside, or ?Q for the queenside (use
 lowercase to query if black can castle)."
-  (cl-assert (vectorp position))
-  (cl-assert (memq side '(?K ?Q ?k ?q)))
-  (let* ((index (+ 65 (if (< side ?a)
-			  (if (= side ?K) 0 1)
-			(if (= side ?k) 2 3))))
+  (cl-check-type position chess-pos)
+  (cl-check-type side (member ?K ?Q ?k ?q))
+  (let* ((index (+ 65 (pcase side (?K 0) (?Q 1) (?k 2) (?q 3))))
 	 (value (aref position index)))
     (if (or (eq value nil) (integerp value))
 	value
-      (when (chess-pos-king-index position (< side ?a))
-	(let* ((color (< side ?a))
-	       (long (= ?Q (upcase side)))
-	       (file (if long 0 7))
-	       (king-file (chess-index-file
-			   (chess-pos-king-index position color)))
-	       rook)
-	  (while (funcall (if long '< '>) file king-file)
-	    (let ((index (chess-rf-to-index (if color 7 0) file)))
-	      (if (chess-pos-piece-p position index (if color ?R ?r))
-		  (setq rook index file king-file)
-		(setq file (funcall (if long '1+ '1-) file)))))
-	  (aset position index rook))))))
+      (let* ((color (< side ?a))
+	     (king-index (chess-pos-king-index position color)))
+	(when king-index
+	  (let* ((long (= ?Q (upcase side)))
+		 (file (if long 0 7))
+		 (king-file (chess-index-file king-index))
+		 rook)
+	    (while (funcall (if long '< '>) file king-file)
+	      (let ((index (chess-rf-to-index (if color 7 0) file)))
+		(if (chess-pos-piece-p position index (if color ?R ?r))
+		    (setq rook index file king-file)
+		  (setq file (funcall (if long #'1+ #'1-) file)))))
+	    (aset position index rook)))))))
 
 (defsubst chess-pos-set-can-castle (position side value)
   "Set whether the king can castle on the given POSITION on SIDE.
@@ -558,9 +575,9 @@ It is only necessary to call this function if setting up a position
 manually.  Note that all newly created positions have full castling
 priveleges set, unless the position is created blank, in which case
 castling priveleges are unset.  See `chess-pos-copy'."
-  (cl-assert (vectorp position))
-  (cl-assert (memq side '(?K ?Q ?k ?q)))
-  (cl-assert (memq value '(nil t)))
+  (cl-check-type position chess-pos)
+  (cl-check-type side (member ?K ?Q ?k ?q))
+  (cl-check-type value (member nil t))
   (aset position (+ 65 (if (< side ?a)
 			   (if (= side ?K) 0 1)
 			 (if (= side ?k) 2 3))) value))
@@ -568,57 +585,64 @@ castling priveleges are unset.  See `chess-pos-copy'."
 (defsubst chess-pos-en-passant (position)
   "Return the index of any pawn on POSITION that can be captured en passant.
 Returns nil if en passant is unavailable."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (aref position 64))
 
 (defsubst chess-pos-set-en-passant (position index)
   "Set the INDEX of any pawn on POSITION that can be captured en passant."
-  (cl-assert (vectorp position))
-  (cl-assert (or (eq index nil)
-	      (and (>= index 0) (< index 64))))
+  (cl-check-type position chess-pos)
+  (cl-check-type index (or null (integer 0 63)))
   (aset position 64 index))
+
+(gv-define-simple-setter chess-pos-en-passant chess-pos-set-en-passant)
 
 (defsubst chess-pos-status (position)
   "Return whether the side to move in the POSITION is in a special state.
-nil is returned if not, otherwise one of the symbols: `check',
-`checkmate', `stalemate'."
-  (cl-assert (vectorp position))
+nil is returned if not, otherwise one of the keywords: `:check',
+`:checkmate', `:stalemate'."
+  (cl-check-type position chess-pos)
   (aref position 69))
 
 (defsubst chess-pos-set-status (position value)
   "Set whether the side to move in POSITION is in a special state.
 VALUE should either be nil, to indicate that the POSITION is normal,
-or one of the symbols: `check', `checkmate', `stalemate'."
-  (cl-assert (vectorp position))
-  (cl-assert (or (eq value nil) (symbolp value)))
+or one of the keywords: `:check', `:checkmate' or `:stalemate'."
+  (cl-check-type position chess-pos)
+  (cl-check-type value (or null keyword))
   (aset position 69 value))
+
+(gv-define-simple-setter chess-pos-status chess-pos-set-status)
 
 (defsubst chess-pos-side-to-move (position)
   "Return the color whose move it is in POSITION."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (aref position 70))
 
 (defsubst chess-pos-set-side-to-move (position color)
   "Set the COLOR whose move it is in POSITION."
-  (cl-assert (vectorp position))
-  (cl-assert (memq color '(nil t)))
+  (cl-check-type position chess-pos)
+  (cl-check-type color (member nil t))
   (aset position 70 color))
+
+(gv-define-simple-setter chess-pos-side-to-move chess-pos-set-side-to-move)
 
 (defsubst chess-pos-annotations (position)
   "Return the list of annotations for this POSITION."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (aref position 71))
 
 (defsubst chess-pos-set-annotations (position annotations)
   "Set the list of ANNOTATIONS for this POSITION."
-  (cl-assert (vectorp position))
-  (cl-assert (listp annotations))
+  (cl-check-type position chess-pos)
+  (cl-check-type annotations list)
   (aset position 71 annotations))
+
+(gv-define-simple-setter chess-pos-annotations chess-pos-set-annotations)
 
 (defun chess-pos-add-annotation (position annotation)
   "Add an ANNOTATION for this POSITION."
-  (cl-assert (vectorp position))
-  (cl-assert (or (stringp annotation) (listp annotation)))
+  (cl-check-type position chess-pos)
+  (cl-check-type annotation (or string list))
   (let ((ann (chess-pos-annotations position)))
     (if ann
 	(nconc ann (list annotation))
@@ -626,13 +650,13 @@ or one of the symbols: `check', `checkmate', `stalemate'."
 
 (defsubst chess-pos-epd (position opcode)
   "Return the value of the given EPD OPCODE, or nil if not set."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (cl-assert opcode)
   (cdr (assq opcode (chess-pos-annotations position))))
 
 (defun chess-pos-set-epd (position opcode &optional value)
   "Set the given EPD OPCODE to VALUE, or t if VALUE is not specified."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (cl-assert opcode)
   (let ((entry (assq opcode (chess-pos-annotations position))))
     (if entry
@@ -641,30 +665,31 @@ or one of the symbols: `check', `checkmate', `stalemate'."
 
 (defun chess-pos-del-epd (position opcode)
   "Delete the given EPD OPCODE."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (cl-assert opcode)
   (chess-pos-set-annotations
    position (assq-delete-all opcode (chess-pos-annotations position))))
 
-(defun chess-pos-preceding-ply (position)
+(defsubst chess-pos-preceding-ply (position)
   "Return the ply that preceds POSITION."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (aref position 74))
 
 (defun chess-pos-set-preceding-ply (position ply)
   "Set the preceding PLY for POSITION."
-  (cl-assert (vectorp position))
+  (cl-check-type position chess-pos)
   (cl-assert (listp ply))
   (aset position 74 ply))
+
+(gv-define-simple-setter chess-pos-preceding-ply chess-pos-set-preceding-ply)
 
 (defsubst chess-pos-copy (position)
   "Copy the given chess POSITION.
 If there are annotations or EPD opcodes set, these lists are copied as
 well, so that the two positions do not share the same lists."
-  (cl-assert (vectorp position))
-  (let ((copy (vconcat position)) i)
-    (setq i (chess-pos-annotations position))
-    (if i (chess-pos-set-annotations copy (copy-alist i)))
+  (cl-check-type position chess-pos)
+  (let ((copy (vconcat position)))
+    (chess-pos-set-annotations copy (copy-alist (chess-pos-annotations position)))
     copy))
 
 (defsubst chess-pos-create (&optional blank)
@@ -686,8 +711,8 @@ The current side-to-move is always white."
 
 (defun chess-pos-material-value (position color)
   "Return the aggregate material value in POSITION for COLOR."
-  (cl-assert (vectorp position))
-  (cl-assert (memq color '(nil t)))
+  (cl-check-type position chess-pos)
+  (cl-check-type color (member nil t))
   (let ((pieces (chess-pos-search position color))
 	(value 0))
     (dolist (index pieces)
@@ -737,10 +762,8 @@ on an adjoining file is called a passed Pawn."
   "Move a piece on the POSITION directly, using the indices in CHANGES.
 This function does not check any rules, it only makes sure you are not
 trying to move a blank square."
-  (cl-assert (vectorp position))
-  (cl-assert (listp changes))
-  (cl-assert (> (length changes) 0))
-
+  (cl-check-type position chess-pos)
+  (cl-check-type changes (and list (not null)))
   (let* ((color (chess-pos-side-to-move position))
 	 (can-castle-kingside (chess-pos-can-castle position (if color ?K ?k)))
 	 (can-castle-queenside (chess-pos-can-castle position (if color ?Q ?q))))
@@ -817,16 +840,11 @@ trying to move a blank square."
 				 (downcase new-piece)))))
 
     ;; did we leave the position in check, mate or stalemate?
-    (cond
-     ((memq :check changes)
-      (chess-pos-set-status position :check))
-     ((memq :checkmate changes)
-      (chess-pos-set-status position :checkmate))
-     ((memq :stalemate changes)
-      (chess-pos-set-status position :stalemate))
-     (t (chess-pos-set-status position nil)))
+    (chess-pos-set-status position
+			  (car-safe (or (memq :check changes)
+					(memq :checkmate changes)
+					(memq :stalemate changes))))
 
-    ;; return the final position
     position))
 
 (chess-message-catalog 'english
@@ -852,6 +870,7 @@ trying to move a blank square."
 					  do (setq first nil)))
 		     when ray collect ray)))
     squares))
+
 (defconst chess-black-can-slide-to
   (let ((squares (make-vector 64 nil)))
     (dotimes (index 64)
@@ -867,6 +886,9 @@ trying to move a blank square."
 					  do (setq first nil)))
 		     when ray collect ray)))
     squares))
+
+(declare-function chess-ply-castling-changes "chess-ply"
+		  (position &optional long king-index))
 
 (defun chess-search-position (position target piece &optional
 				       check-only no-castling)
@@ -885,9 +907,9 @@ indices which indicate where a piece may have moved from.
 If CHECK-ONLY is non-nil and PIECE is either t or nil, only consider
 pieces which can give check (not the opponents king).
 If NO-CASTLING is non-nil, do not consider castling moves."
-  (cl-assert (vectorp position))
-  (cl-assert (and (>= target 0) (< target 64)))
-  (cl-assert (memq piece '(t nil ?K ?Q ?N ?B ?R ?P ?k ?q ?n ?b ?r ?p)))
+  (cl-check-type position chess-pos)
+  (cl-check-type target (integer 0 63))
+  (cl-check-type piece (member t nil ?K ?Q ?N ?B ?R ?P ?k ?q ?n ?b ?r ?p))
   (let* ((color (if (characterp piece)
 		    (< piece ?a)
 		  piece))
@@ -907,7 +929,7 @@ If NO-CASTLING is non-nil, do not consider castling moves."
 	  (let ((pos-piece (chess-pos-piece position (caar ray))))
 	    (setq ray (cond ((memq pos-piece (cdar ray))
 			     (chess--add-candidate (caar ray)) nil)
-			    ((eq pos-piece ? ) (cdr ray)))))))
+			    ((= pos-piece ? ) (cdr ray)))))))
 
       ;; test for knights and pawns
       (dolist (p (if piece '(?P ?N) '(?p ?n)))
@@ -939,10 +961,10 @@ If NO-CASTLING is non-nil, do not consider castling moves."
 
      ;; pawn movement, which is diagonal 1 when taking, but forward
      ;; 1 or 2 when moving (the most complex piece, actually)
-     ((eq test-piece ?P)
+     ((= test-piece ?P)
       (let ((p (chess-pos-piece position target))
 	    (backward (if color chess-direction-south chess-direction-north)))
-	(if (if (eq p ? )
+	(if (if (= p ? )
 		;; check for en passant
 		(and (= (chess-index-rank target) (if color 2 5))
 		     (let ((ep (chess-pos-en-passant position)))
@@ -974,9 +996,9 @@ If NO-CASTLING is non-nil, do not consider castling moves."
 		  (chess--add-candidate pos)))
 	  (if (setq pos (chess-next-index target backward))
 	      (let ((pos-piece (chess-pos-piece position pos)))
-		(if (eq pos-piece piece)
+		(if (= pos-piece piece)
 		    (chess--add-candidate pos)
-		  (if (and (eq pos-piece ? )
+		  (if (and (= pos-piece ? )
 			   (= (if color 4 3) (chess-index-rank target))
 			   (setq pos (funcall (if color #'+ #'-) pos 8))
 			   (chess-pos-piece-p position pos piece))
@@ -993,11 +1015,11 @@ If NO-CASTLING is non-nil, do not consider castling moves."
 	(setq pos (chess-next-index target dir))
 	(while pos
 	  (let ((pos-piece (chess-pos-piece position pos)))
-	    (if (eq pos-piece piece)
+	    (if (= pos-piece piece)
 		(progn
 		  (chess--add-candidate pos)
 		  (setq pos nil))
-	      (setq pos (and (eq pos-piece ? ) (chess-next-index pos dir)))))))
+	      (setq pos (and (= pos-piece ? ) (chess-next-index pos dir)))))))
       ;; test whether the rook can move to the target by castling
       (if (and (= test-piece ?R) (not no-castling))
 	  (let (rook)

@@ -23,8 +23,9 @@
 (require 'chess-uci)
 
 (defgroup chess-stockfish nil
-  "The publicly available chess engine 'stockfish'."
+  "The publically available chess engine 'stockfish'."
   :group 'chess-engine
+  :link '(custom-manual "(chess)Stockfish")
   :link '(url-link "http://www.stockfishchess.com"))
 
 (defcustom chess-stockfish-path (executable-find "stockfish")
