@@ -184,6 +184,23 @@ If KEYWORD is the last element of the changes of ply, `t' is returned."
   (cl-check-type position chess-pos)
   (list position))
 
+
+(defconst promotion-options
+  '((queen  ?Q ?q)
+    (rook   ?R ?r)
+    (bishop ?B ?b)
+    (knight ?N ?n)))
+
+(defun ask-promotion (white)
+  (nth (if white 1 2)
+       (assoc (intern-soft
+               (or (completing-read
+                    "Symbol? "
+                    (mapcar (lambda (x) (symbol-name (car x)))
+                            promotion-options))
+                   "queen"))
+              promotion-options)))
+
 (defun chess-ply-create (position &optional valid-p &rest changes)
   "Create a ply from the given POSITION by applying the supplied CHANGES.
 This function will guarantee the resulting ply is legal, and will also
@@ -231,7 +248,9 @@ maneuver."
 	      (when (and (not (memq :promote changes))
 			 (= (if color 0 7)
 			    (chess-index-rank (cadr changes))))
-		(chess-error 'ambiguous-promotion))
+                (let ((promo (ask-promotion color)))
+                  (nconc changes (list :promote promo))
+                  (setq ply (cons position changes))))
 
 	      ;; is this an en-passant capture?
 	      (when (let ((ep (chess-pos-en-passant position)))
